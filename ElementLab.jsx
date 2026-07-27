@@ -118,9 +118,9 @@ const PROPOSAL_COST = 2; // beryllium required to submit a governance proposal
 const PERIOD1_BONUS_TURNS = 12;
 const PERIOD1_BONUS_MULT = 1.5;
 
-const HELIUM_CHANCE = 0.35;
+const HELIUM_CHANCE = 0.45;
 const LITHIUM_DROP_CHANCE = 0.12;
-const BERYLLIUM_DROP_CHANCE = 0.18;
+const BERYLLIUM_DROP_CHANCE = 0.28;
 const LITHIUM_BUFF_MULT = 1.5;
 
 const BOT_TURN_DELAY_MS = 950;   // pause so a bot's action is readable before advancing
@@ -305,23 +305,30 @@ const TUTORIAL_STEPS = [
   {
     target: "fluorine",
     title: "Burning is the key, not a footnote",
-    body: "Selling Fluorine destroys a slice of it permanently — deflationary burn. Here, that's not just flavor: you can't synthesize Water later until you've actually burned some yourself. Sell a little now.",
+    body: "Selling Fluorine destroys a slice of it permanently — deflationary burn. Here, that's not just flavor: you can't synthesize Water later until you've actually burned some yourself. Corrode some Fluorine now so you've got some to sell.",
+    requiresAction: "extractFluorine",
+    actionHint: "Click Corrode above to continue.",
+  },
+  {
+    target: "market",
+    title: "Burning is the key, not a footnote",
+    body: "Now sell that Fluorine on the market. The sale destroys a slice of it permanently — that's the deflationary burn, and it's what unlocks Water later.",
     requiresAction: "burnFluorine",
     actionHint: "Sell some Fluorine on the market above to continue.",
   },
   {
-    target: "liquidity",
+    target: "market",
     title: "Liquidity providing — and impermanent loss",
-    body: "Deposit into any pool and you'll earn a cut of every trade in it. But your position can end up worth less than if you'd simply held the tokens, if price moves a lot while you're in it. That gap is impermanent loss.",
+    body: "Depositing needs two things at once: USD and the matching amount of whichever token's pool you're depositing into — the game calculates that token amount for you at the current price. You already have some Hydrogen from mining, so Hydrogen (selected above) is a good one to try. If you're short on materials, use \"Pause & explore\" below to go mine more, then come back.",
     requiresAction: "addLiquidity",
-    actionHint: "Add liquidity to any pool above to continue.",
+    actionHint: "Add liquidity to the Hydrogen pool above to continue.",
   },
   {
-    target: "lithium",
+    target: "mining",
     title: "Inflationary yield: minted from nothing",
-    body: "Staking Lithium boosts your Hydrogen mining every single time — market or not. That extra token comes from nowhere but the schedule itself. This is inflationary yield. Keep the contrast in mind for the next step.",
+    body: "Lithium isn't mined directly — it's a random bonus (about 1 in 8) when you extract Hydrogen. If your Lithium count is still 0, keep clicking Extract on Hydrogen until one drops, then come back here and stake it. Staking boosts your Hydrogen mining every single time — market or not. That extra token comes from nowhere but the schedule itself: inflationary yield. Keep the contrast in mind for the next step.",
     requiresAction: "toggleBuff",
-    actionHint: "Stake Lithium for the buff above to continue.",
+    actionHint: "Extract Hydrogen until Lithium drops, then Stake it above to continue.",
   },
   {
     target: "genesis",
@@ -331,11 +338,32 @@ const TUTORIAL_STEPS = [
     actionHint: "Combine, then Stake, to continue.",
   },
   {
+    target: "deuterium",
+    title: "A third source: Deuterium",
+    body: "Deuterium is mined the same way Hydrogen is — free, but random. It exists mainly to feed the fixed-APR contract just below it. Extract some now.",
+    requiresAction: "extractDeuterium",
+    actionHint: "Click Extract on Deuterium above to continue.",
+  },
+  {
+    target: "deuteriumStake",
+    title: "Fixed-APR yield: guaranteed, no matter what",
+    body: "Stake Deuterium here and you're owed exactly 10% back every epoch, full stop — even if not a single trade happens anywhere on the table. Compare that to Genesis Alloy: this pays on a schedule; that pays only from real activity. Neither is 'better' — they're opposite risk profiles wearing the same word, 'staking'. Stake some D now.",
+    requiresAction: "stakeDeuterium",
+    actionHint: "Stake some Deuterium above to continue.",
+  },
+  {
+    target: ["genesis", "market", "farming"],
+    title: "Two-sided farming: an emission, not a fee cut",
+    body: "This is a different shape of yield again: deposit both tokens of a pair, matched to its current ratio, and you earn a reward token every turn just for holding a share of the pool — paid from emissions, not from a cut of swap fees. The only pair open to you this early is Lithium–Beryllium, and Beryllium isn't mined — it's a chance trace when you combine a Genesis Compound (Hydrogen + Helium, above), or you can just buy it outright on the Market (Beryllium + Buy are already selected). Get some of each, then deposit into the Li–Be farm below. Auto-compound plows half of every reward back in automatically; leave it off and rewards just pile up to claim by hand.",
+    requiresAction: "farmDeposit",
+    actionHint: "Get Lithium + Beryllium, then deposit into the Li–Be farm below.",
+  },
+  {
     target: "governance",
     title: "Governance decides who gets to create Life",
-    body: "Beryllium buys you a vote, but the Treasury bloc votes no by default — your proposal can genuinely fail. A stalled star (next step) adds voting weight too, so a failed star isn't wasted. Submit a proposal now, whatever the outcome.",
+    body: "A proposal costs 2 Beryllium — by now you likely already have some from the last step. If not, the same two routes apply: a chance trace from combining Genesis, or buying it outright on the Market. The Treasury bloc votes no by default, so your proposal can genuinely fail — a stalled star (next step) adds voting weight too, so a failed vote isn't wasted. Submit now, whatever the outcome.",
     requiresAction: "propose",
-    actionHint: "Submit a proposal above to continue.",
+    actionHint: "Submit a proposal below to continue.",
   },
   {
     target: "fusion",
@@ -481,15 +509,30 @@ function SectionLabel({ children }) {
 
 // Spotlight overlay — highlights real UI rather than faking a separate
 // walkthrough. Ported from ElementLab.jsx's tutorial pattern.
-function TutorialOverlay({ step, index, total, rect, onNext, onBack, onSkip, canAdvance, actionHint }) {
+function TutorialOverlay({ step, index, total, rect, onNext, onBack, onPause, onSkip, canAdvance, actionHint }) {
   const maskColor = "rgba(0,0,0,0.72)";
   const pad = 8;
   let tooltipStyle = { position: "fixed", zIndex: 51, maxWidth: "min(320px, calc(100vw - 32px))" };
   if (rect) {
-    const spaceBelow = window.innerHeight - (rect.top + rect.height);
-    const placeBelow = spaceBelow > 200;
+    // Place the tooltip in whichever of "above" / "below" the highlight has
+    // more room, then cap its height (with scrolling) to whatever that gap
+    // actually is — a fixed guessed height here is what let long step text
+    // spill back over the highlighted element.
+    const gap = 8, margin = 16;
+    const highlightTop = rect.top - pad;
+    const highlightBottom = rect.top + rect.height + pad;
+    const spaceBelow = window.innerHeight - highlightBottom - gap - margin;
+    const spaceAbove = highlightTop - gap - margin;
+    const placeBelow = spaceBelow >= spaceAbove;
     tooltipStyle.left = Math.max(16, Math.min(rect.left, window.innerWidth - 340));
-    tooltipStyle.top = placeBelow ? rect.top + rect.height + pad + 8 : Math.max(16, rect.top - pad - 8 - 220);
+    tooltipStyle.overflowY = "auto";
+    if (placeBelow) {
+      tooltipStyle.top = highlightBottom + gap;
+      tooltipStyle.maxHeight = Math.max(140, spaceBelow);
+    } else {
+      tooltipStyle.maxHeight = Math.max(140, spaceAbove);
+      tooltipStyle.top = Math.max(margin, highlightTop - gap - tooltipStyle.maxHeight);
+    }
   } else {
     tooltipStyle.left = "50%";
     tooltipStyle.top = "50%";
@@ -509,9 +552,13 @@ function TutorialOverlay({ step, index, total, rect, onNext, onBack, onSkip, can
         <div style={{ position: "fixed", inset: 0, background: maskColor, zIndex: 49 }} />
       )}
       <div style={{ ...tooltipStyle, background: "rgba(8,10,12,0.96)", backdropFilter: "blur(6px)", border: `1px solid ${C.accent}`, borderRadius: 16, padding: 16, boxShadow: "0 8px 30px rgba(0,0,0,0.5)" }}>
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2 gap-2">
           <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: C.accent }}>Step {index + 1} of {total}</p>
-          <button onClick={onSkip} className="text-[11px] transition" style={{ color: "rgba(255,255,255,0.5)" }}>Skip tutorial</button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={onPause} className="text-[11px] transition" style={{ color: "rgba(255,255,255,0.6)" }}>Pause &amp; explore</button>
+            <span style={{ color: "rgba(255,255,255,0.3)" }}>·</span>
+            <button onClick={onSkip} className="text-[11px] transition" style={{ color: "rgba(255,255,255,0.5)" }}>Skip tutorial</button>
+          </div>
         </div>
         <h3 className="text-sm font-semibold mb-1.5" style={{ color: "rgba(255,255,255,0.95)" }}>{step.title}</h3>
         <p className="text-xs leading-5 mb-3" style={{ color: "rgba(255,255,255,0.65)" }}>{step.body}</p>
@@ -604,6 +651,7 @@ export default function ElementGame() {
   const [tutorialActive, setTutorialActive] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
   const [tutorialActionDone, setTutorialActionDone] = useState(false);
+  const [tutorialPaused, setTutorialPaused] = useState(false);
   const [highlightRect, setHighlightRect] = useState(null);
   const targetRefs = useRef({});
   const registerRef = (name) => (el) => { targetRefs.current[name] = el; };
@@ -640,39 +688,82 @@ export default function ElementGame() {
     setTutorialActionDone(false);
   }
   function skipTutorial() { setTutorialActive(false); }
+  function pauseTutorial() { setTutorialPaused(true); }
+  function resumeTutorial() { setTutorialPaused(false); }
+
+  // A step's target can be a single ref key or an array of them (when the
+  // needed action spans more than one section — e.g. Beryllium can come
+  // from Genesis combining OR the open Market, so the governance step
+  // needs both unlocked at once). This normalizes either form to an array.
+  function stepTargetKeys(step) {
+    if (!step?.target) return [];
+    return Array.isArray(step.target) ? step.target : [step.target];
+  }
 
   // Switch the market tab to match whatever the current step needs to show.
   useEffect(() => {
-    if (!tutorialActive) return;
+    if (!tutorialActive || tutorialPaused) return;
     const step = TUTORIAL_STEPS[tutorialStep];
-    if (step?.target === "liquidity") setMarketMode("liquidity");
-    if (step?.target === "market") setMarketMode("swap");
-  }, [tutorialActive, tutorialStep]);
+    const targets = stepTargetKeys(step);
+    if (targets.includes("liquidity")) setMarketMode("liquidity");
+    if (targets.includes("market")) setMarketMode("swap");
+    // The burn-Fluorine step lives on the "market" target too, but it
+    // needs Fluorine + Sell preselected specifically — otherwise the
+    // player has to know to pick those themselves before the highlighted
+    // action becomes possible.
+    if (step?.requiresAction === "burnFluorine") {
+      setSwapTokenKey("fluorine");
+      setSwapDirection("sell");
+    }
+    // Same story for the liquidity step: it also shares the "market"
+    // target, and needs the Liquidity tab open with Hydrogen preselected
+    // (the token the player is most likely to already hold from mining).
+    if (step?.requiresAction === "addLiquidity") {
+      setMarketMode("liquidity");
+      setSwapTokenKey("hydrogen");
+    }
+    // Farming (Li–Be pair) and Governance (proposal cost) both need
+    // Beryllium — preselect it on the market's Buy side so that path is
+    // one click away alongside the Genesis-combine chance-drop path.
+    if (step?.requiresAction === "farmDeposit" || step?.requiresAction === "propose") {
+      setSwapTokenKey("beryllium");
+      setSwapDirection("buy");
+    }
+  }, [tutorialActive, tutorialPaused, tutorialStep]);
 
   // Scroll the spotlighted element into view whenever the step changes.
   useEffect(() => {
-    if (!tutorialActive) return;
+    if (!tutorialActive || tutorialPaused) return;
     const step = TUTORIAL_STEPS[tutorialStep];
-    if (step?.target) {
-      const el = targetRefs.current[step.target];
+    const [firstTarget] = stepTargetKeys(step);
+    if (firstTarget) {
+      const el = targetRefs.current[firstTarget];
       if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-  }, [tutorialActive, tutorialStep]);
+  }, [tutorialActive, tutorialPaused, tutorialStep]);
 
-  // Track the spotlighted element's screen position every frame — cheap
+  // Track the spotlighted element(s)' screen position every frame — cheap
   // enough at tutorial scale, and it keeps the highlight glued to the
-  // element through scrolling, resizing, or layout shifts.
+  // element through scrolling, resizing, or layout shifts. When a step
+  // lists multiple targets, the highlight is the union bounding box
+  // covering all of them.
   useEffect(() => {
-    if (!tutorialActive) return;
+    if (!tutorialActive || tutorialPaused) return;
     let raf;
     function loop() {
       const step = TUTORIAL_STEPS[tutorialStep];
-      if (step?.target) {
-        const el = targetRefs.current[step.target];
-        if (el) {
-          const r = el.getBoundingClientRect();
-          setHighlightRect(prev => (prev && prev.top === r.top && prev.left === r.left && prev.width === r.width && prev.height === r.height) ? prev : { top: r.top, left: r.left, width: r.width, height: r.height });
-        }
+      const targets = stepTargetKeys(step);
+      const rects = targets
+        .map(key => targetRefs.current[key])
+        .filter(Boolean)
+        .map(el => el.getBoundingClientRect());
+      if (rects.length) {
+        const top = Math.min(...rects.map(r => r.top));
+        const left = Math.min(...rects.map(r => r.left));
+        const bottom = Math.max(...rects.map(r => r.top + r.height));
+        const right = Math.max(...rects.map(r => r.left + r.width));
+        const r = { top, left, width: right - left, height: bottom - top };
+        setHighlightRect(prev => (prev && prev.top === r.top && prev.left === r.left && prev.width === r.width && prev.height === r.height) ? prev : r);
       } else {
         setHighlightRect(prev => (prev === null ? prev : null));
       }
@@ -680,7 +771,7 @@ export default function ElementGame() {
     }
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [tutorialActive, tutorialStep]);
+  }, [tutorialActive, tutorialPaused, tutorialStep]);
 
   // ── Start / reset ────────────────────────────────────────────────────
   function startGame(withTutorial = false) {
@@ -724,6 +815,7 @@ export default function ElementGame() {
     setTutorialActive(withTutorial);
     setTutorialStep(0);
     setTutorialActionDone(false);
+    setTutorialPaused(false);
     setMarketMode("swap");
     setPhase("playing");
   }
@@ -816,7 +908,7 @@ export default function ElementGame() {
         }
         pushLog(`Fusion stalled after ${FUSION_STAGES[f.stageIndex]}. The star became a white dwarf — but the attempt still counts toward a future governance vote.`);
         setDeadStars(n => n + 1);
-        return { ...f, stalled: true };
+        return { ...f, active: false, stalled: true };
       }
       const stageName = FUSION_STAGES[nextIndex];
       const yieldAmt = STAGE_YIELD[stageName];
@@ -977,6 +1069,7 @@ export default function ElementGame() {
     setElements(e => ({ ...e, fluorine: e.fluorine + yieldAmt }));
     flash("fluorine");
     pushLog(`Corroded ${yieldAmt} Fluorine out of raw material.`);
+    markTutorialAction("extractFluorine");
     return true;
   }
   function toggleLithiumBuff() {
@@ -1029,6 +1122,7 @@ export default function ElementGame() {
     setElements(e => ({ ...e, deuterium: e.deuterium + yieldAmt }));
     flash("deuterium");
     pushLog(`Extracted ${yieldAmt} Deuterium from raw material.`);
+    markTutorialAction("extractDeuterium");
     return true;
   }
   function stakeDeuterium(amount) {
@@ -1037,6 +1131,7 @@ export default function ElementGame() {
     setDeuteriumStaked(s => s + amount);
     pushLog(`Staked ${amount.toFixed(2)} D in the containment field — guaranteed +10% back every ${DEUTERIUM_EPOCH_TURNS} turns, market or no market.`);
     flash("deuterium");
+    markTutorialAction("stakeDeuterium");
     return true;
   }
   function unstakeDeuterium() {
@@ -1080,6 +1175,7 @@ export default function ElementGame() {
       return { ...prev, [pairKey]: existing ? { ...existing, shares: existing.shares + sharesMinted } : { shares: sharesMinted, autoCompound: false } };
     });
     pushLog(`Farmed ${pair.label}: deposited ${amountA.toFixed(2)} ${RESOURCES[pair.tokenA].symbol} + ${amountB.toFixed(2)} ${RESOURCES[pair.tokenB].symbol}.`);
+    markTutorialAction("farmDeposit");
     return true;
   }
   function toggleFarmAutoCompound(pairKey) {
@@ -1425,7 +1521,7 @@ export default function ElementGame() {
         </div>
 
         {/* Mining */}
-        <div>
+        <div ref={registerRef("mining")}>
           <SectionLabel>Mine — free, spends a turn</SectionLabel>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div ref={registerRef("hydrogen")}>
@@ -1558,11 +1654,27 @@ export default function ElementGame() {
                   );
                 })() : (
                   <div className="space-y-2">
+                    <p className="text-[10px]" style={{ color: C.muted }}>
+                      You hold: <span style={{ color: C.text }}>${usd.toFixed(2)}</span> and <span style={{ color: C.text }}>{(elements[swapTokenKey] || 0).toFixed(3)} {RESOURCES[swapTokenKey].symbol}</span> — both are needed to deposit into the {RESOURCES[swapTokenKey].symbol} pool.
+                    </p>
                     <div className="flex items-center gap-2">
-                      <input type="number" min="0" step="0.01" value={lpAmount} onChange={e => setLpAmount(e.target.value)} placeholder="USD to deposit (token matched automatically)"
+                      <input type="number" min="0" step="0.01" value={lpAmount} onChange={e => setLpAmount(e.target.value)} placeholder={`USD to deposit (${RESOURCES[swapTokenKey].symbol} matched automatically)`}
                         className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none" style={{ borderColor: C.border, background: C.elev, color: C.text }} />
                       <Btn onClick={() => runAction(addLiquidity)} disabled={!isHumanTurn} tone="accent">Add</Btn>
                     </div>
+                    {(() => {
+                      const amt = parseFloat(lpAmount);
+                      if (!amt || amt <= 0) return null;
+                      const pool = pools[swapTokenKey];
+                      const price = pool.usd / pool.token;
+                      const neededToken = amt / price;
+                      const short = neededToken > (elements[swapTokenKey] || 0) || amt > usd;
+                      return (
+                        <p className="text-[11px]" style={{ color: short ? C.red : C.muted }}>
+                          ≈ needs {neededToken.toFixed(3)} {RESOURCES[swapTokenKey].symbol} to match that ${amt.toFixed(2)}{short ? " — not enough on hand yet" : ""}
+                        </p>
+                      );
+                    })()}
                     <p className="text-[10px]" style={{ color: C.muted }}>Earns a share of every swap fee in this pool — value can end up below holding if price moves a lot. That's impermanent loss.</p>
                   </div>
                 )}
@@ -1621,6 +1733,7 @@ export default function ElementGame() {
         </div>
 
         {/* Deuterium containment field — fixed APR, the opposite of Genesis Alloy staking */}
+        <div ref={registerRef("deuteriumStake")}>
         <Card glow={flashCard === "deuterium"}>
           <SectionLabel>Deuterium Containment Field — fixed 10% APR</SectionLabel>
           <p className="text-xs mb-3" style={{ color: C.muted }}>
@@ -1648,9 +1761,10 @@ export default function ElementGame() {
             <Btn onClick={() => runAction(claimDeuteriumReward)} disabled={!isHumanTurn || deuteriumPendingReward <= 0} tone="accent" small>Claim</Btn>
           </div>
         </Card>
+        </div>
 
         {/* Two-sided liquidity farming */}
-        <div>
+        <div ref={registerRef("farming")}>
           <SectionLabel>Liquidity Farming — deposit both sides, earn a reward token</SectionLabel>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {Object.entries(FARM_PAIRS).map(([key, pair]) => {
@@ -1781,7 +1895,7 @@ export default function ElementGame() {
               ) : (
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <Btn onClick={() => runAction(beginPlanetLock)} disabled={!isHumanTurn || !fusion.wentSupernova || elements.silicon < 2 || elements.oxygen < 2 || elements.magnesium < 1 || elements.iron < 1} small>Lock materials → Planet ({crafted.planet})</Btn>
-                  <p className="text-[10px]" style={{ color: C.muted }}>needs 2 Si + 2 O + 1 Mg + 1 Fe, post-supernova, locked {PLANET_LOCK_MS / 1000}s</p>
+                  <p className="text-[10px]" style={{ color: C.muted }}>needs 2 Si + 2 O + 1 Mg + 1 Fe, post-supernova, locked {PLANET_LOCK_TURNS} turns</p>
                 </div>
               )}
 
@@ -1823,7 +1937,7 @@ export default function ElementGame() {
       )}
 
       {/* Tutorial overlay */}
-      {tutorialActive && currentTutorialStep && (
+      {tutorialActive && currentTutorialStep && !tutorialPaused && (
         <TutorialOverlay
           step={currentTutorialStep}
           index={tutorialStep}
@@ -1831,10 +1945,24 @@ export default function ElementGame() {
           rect={highlightRect}
           onNext={nextTutorialStep}
           onBack={prevTutorialStep}
+          onPause={pauseTutorial}
           onSkip={skipTutorial}
           canAdvance={canAdvanceTutorial}
           actionHint={currentTutorialStep.actionHint}
         />
+      )}
+
+      {/* Floating resume pill — shown while the tutorial is paused so the
+          rest of the game is fully clickable (e.g. to go mine materials)
+          without losing tutorial progress. */}
+      {tutorialActive && tutorialPaused && (
+        <button
+          onClick={resumeTutorial}
+          className="flex items-center gap-2 text-xs font-medium"
+          style={{ position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)", zIndex: 51, background: C.accent, color: "#050708", borderRadius: 999, padding: "10px 18px", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
+        >
+          ▶ Resume tutorial (step {tutorialStep + 1} of {TUTORIAL_STEPS.length})
+        </button>
       )}
     </main>
   );
